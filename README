@@ -1,0 +1,8 @@
+bluetooth-headphones
+--------------------
+
+A bash script to connect, disconnect, and reconnect my SONY WH-CH700
+headphones. It should choose the A2DP audio sink (the high quality one) by
+default.
+
+Depends on pulseaudio and bluez.

@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# an integrated script to connect and disconnect headphones
+# the script now detects if headphones are connected properly
+# Requires: pulseaudio and bluez.
+# Assumes: only internal sound + headphones are visible (i.e. a maximum of 2
+# pulseaudio sinks at any given time).
+
+devid="AB:CD:EF:01:23:45" # device MAC address
+# TODO read from .config file?
+
+function disconnect {
+    echo "$devid"
+
+    ncards=`pacmd list-cards | grep "index:" | wc -l`
+
+    while [[ $ncards -gt 1 ]]
+    do
+        echo "disconnecting:"
+
+    cat << EOF | bluetoothctl
+disconnect $devid
+exit
+EOF
+        echo "Waiting cautiously..."
+        sleep 2
+        # if only one card is visible to pulseaudio, the headphones 
+        # have been disconnected
+        ncards=`pacmd list-cards | grep "index:" | wc -l`
+    done
+
+    echo "disconnected"
+}
+
+function connect {
+    echo "$devid"
+
+    cont=1
+
+    while [[ $cont == 1 ]]
+    do
+        echo "attempting to connect:"
+        cat << EOF | bluetoothctl
+connect $devid
+exit
+EOF
+
+        echo "Waiting cautiously...." # TODO is this needed?
+        sleep 2 # this is needed to limit the number of iterations
+
+        echo "setting default pulseaudio sink to most recently connected sink"
+        sink=`pactl list short sinks | sed -n '$s/\t.*//p'`
+        pactl set-default-sink $sink
+
+        echo "setting profile to high quality audio output:"
+        card=`pacmd list-cards | sed -n 's/ *index: //p' | tail -1`
+        cont=`pacmd set-card-profile $card a2dp_sink | \
+            sed -n 's/No such profile.*/1/p'`
+        echo $cont | sed -n 's/1/Failed. Retrying.../p'
+    done
+    echo "connected"
+}
+
+case $1 in 
+    "connect")
+        connect;;
+    "disconnect")
+        disconnect;;
+    "reconnect")
+        disconnect
+        echo "Waiting very cautiously..."
+        sleep 2
+        connect
+        ;;
+    *)
+        echo "Usage: headphones connect"
+        echo "   or: headphones reconnect"
+        echo "   or: headphones disconncect"
+        ;;
+esac
